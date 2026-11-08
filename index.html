@@ -52,9 +52,70 @@ const subjects={
 const checklist=["Studied","Made notes","Revised for prelims","Studied after prelims","Revised after prelims","Board ready"];
 const schedule={8:["Science","Our Environment","Bonus study kickoff"],9:["Mathematics Standard","Polynomials","Maths home tutor — 2–4 PM"],10:["Mathematics Standard","Quadratic Equations","Maths home tutor — 2–4 PM"],11:["Mathematics Standard","Triangles","Maths home tutor — 11 AM–1 PM · Bhai Dooj"],12:["Science — Biology","Heredity","Maths tutor availability needs confirmation"],13:["Youth Parliament","Lok Sabha preparation","Event date to confirm"],14:["Youth Parliament","Lok Sabha preparation","Brochure lists 14–15 November"],15:["Youth Parliament","Lok Sabha preparation","Keep flexible until dates confirmed"],16:["Mathematics Standard","Arithmetic Progressions","School resumes (provisional)"],17:["Mathematics Standard","Coordinate Geometry","School + Class Toppers"],18:["Science — Physics","The Human Eye and the Colourful World","School + Class Toppers"],19:["Science — Physics","Magnetic Effects of Electric Current","School + Class Toppers"],20:["Hindi — स्पर्श (कविता)","आत्मत्राण","Hindi priority day"],21:["Social Science — History","Print Culture and the Modern World","SST revision"],22:["English — Writing & Grammar","Tenses","English revision"],23:["Mathematics Standard","Triangles","Maths tuition"],24:["Mathematics Standard","Circles","Maths tuition"],25:["Science — Biology","Our Environment","Science tuition"],26:["Science — Biology","Heredity","Science tuition"],27:["Hindi — संचयन","सपनों के-से दिन","Hindi priority day"],28:["Social Science — Geography","Manufacturing Industries","SST priority day"],29:["English — Footprints Without Feet","Footprints Without Feet","English revision"],30:["Mathematics Standard","Statistics","Maths tuition"]};
 const initial={chapters:{},notes:{},dateNotes:{},tasks:{},schedule:{},exam:{prelimDates:"",boardDates:"",papers:"",marks:"",resources:""}};
-let state=load();let currentPage='tracker',currentSubject=Object.keys(subjects)[0],currentChapter=subjects[currentSubject][0][0],selectedDate='2026-11-08',calendarMonth=10;
-function load(){try{return {...initial,...JSON.parse(localStorage.getItem('class10cc')||'{}')}}catch(e){return structuredClone(initial)}}
-function save(){localStorage.setItem('class10cc',JSON.stringify(state));const el=document.getElementById('saveStatus');if(el){el.textContent='● SAVED LOCALLY';el.className='tag green'}}
+let state=structuredClone(initial);let currentPage='tracker',currentSubject=Object.keys(subjects)[0],currentChapter=subjects[currentSubject][0][0],selectedDate='2026-11-08',calendarMonth=10;
+const DB_NAME='c10c-local-db',DB_VERSION=1,STORE_NAME='app';
+let dbPromise=null,saveQueue=Promise.resolve(),storageMode='loading';
+function openC10CDB(){
+  if(!('indexedDB' in window))return Promise.reject(new Error('IndexedDB unavailable'));
+  if(!dbPromise)dbPromise=new Promise((resolve,reject)=>{
+    const request=indexedDB.open(DB_NAME,DB_VERSION);
+    request.onupgradeneeded=()=>{const db=request.result;if(!db.objectStoreNames.contains(STORE_NAME))db.createObjectStore(STORE_NAME)};
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>reject(request.error||new Error('Could not open local database'));
+  });
+  return dbPromise;
+}
+async function readDBState(){
+  const db=await openC10CDB();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORE_NAME,'readonly'),request=tx.objectStore(STORE_NAME).get('state');
+    request.onsuccess=()=>resolve(request.result||null);
+    request.onerror=()=>reject(request.error||new Error('Could not read local database'));
+  });
+}
+async function writeDBState(snapshot){
+  const db=await openC10CDB();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORE_NAME,'readwrite');
+    tx.objectStore(STORE_NAME).put(snapshot,'state');
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>reject(tx.error||new Error('Could not save local database'));
+    tx.onabort=()=>reject(tx.error||new Error('Local database save aborted'));
+  });
+}
+function mergeState(raw){
+  if(!raw||typeof raw!=='object'||Array.isArray(raw))return structuredClone(initial);
+  return {...structuredClone(initial),...raw,chapters:raw.chapters||{},notes:raw.notes||{},dateNotes:raw.dateNotes||{},tasks:raw.tasks||{},schedule:raw.schedule||{},exam:{...initial.exam,...(raw.exam||{})}};
+}
+async function load(){
+  try{
+    const saved=await readDBState();
+    if(saved){state=mergeState(saved);storageMode='indexeddb';}
+    else{
+      let legacy=null;
+      try{legacy=JSON.parse(localStorage.getItem('class10cc')||'null')}catch(e){}
+      state=mergeState(legacy);
+      await writeDBState(state);
+      storageMode='indexeddb';
+    }
+  }catch(error){
+    console.warn('C10C IndexedDB unavailable; using localStorage fallback.',error);
+    try{state=mergeState(JSON.parse(localStorage.getItem('class10cc')||'null'))}catch(e){state=structuredClone(initial)}
+    storageMode='fallback';
+  }
+  updateStorageStatus();
+}
+function updateStorageStatus(){
+  const el=document.getElementById('saveStatus');if(!el)return;
+  if(storageMode==='indexeddb'){el.textContent='● SAVED ON DEVICE';el.className='tag green';}
+  else if(storageMode==='fallback'){el.textContent='● LOCAL BACKUP MODE';el.className='tag yellowtag';}
+  else{el.textContent='● LOADING DATA';el.className='tag';}
+}
+function save(){
+  const snapshot=JSON.parse(JSON.stringify(state));
+  try{localStorage.setItem('class10cc',JSON.stringify(snapshot));}catch(error){console.warn('LocalStorage safety mirror unavailable.',error);}
+  saveQueue=saveQueue.then(()=>writeDBState(snapshot)).then(()=>{storageMode='indexeddb';updateStorageStatus();}).catch(error=>{console.error('IndexedDB save failed.',error);storageMode='fallback';updateStorageStatus();});
+}
 function key(s,c){return s+'::'+c}function pct(s,c){return (subjects[s].find(x=>x[0]===c)||[c,0])[1]}
 function chapterData(s,c){return state.chapters[key(s,c)]||(state.chapters[key(s,c)]={checks:Array(6).fill(false)})}
 function allChapters(){return Object.entries(subjects).flatMap(([s,cs])=>cs.map(([c,p])=>({s,c,p})))}
@@ -113,5 +174,5 @@ return head('04 / PREPARATION','Exam Centre','Your prelim and CBSE board schedul
 function bindPage(){if(currentPage==='tracker'){document.querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>{currentSubject=b.dataset.sub;currentChapter=subjects[currentSubject][0][0];render()});document.getElementById('chapterSelect').onchange=e=>{currentChapter=e.target.value;render()};document.querySelectorAll('[data-check]').forEach(el=>el.onchange=()=>{chapterData(currentSubject,currentChapter).checks[+el.dataset.check]=el.checked;save();render()});document.getElementById('chapterNote').oninput=e=>{state.notes[key(currentSubject,currentChapter)]=e.target.value;save()}}
 if(currentPage==='calendar'){document.getElementById('prevMonth').onclick=()=>{calendarMonth=Math.max(0,calendarMonth-1);render()};document.getElementById('nextMonth').onclick=()=>{calendarMonth=Math.min(11,calendarMonth+1);render()};document.querySelectorAll('[data-date]').forEach(el=>el.onclick=()=>{selectedDate=el.dataset.date;if(el.dataset.other)calendarMonth=new Date(selectedDate+'T12:00:00').getMonth();render()});document.getElementById('dateNote').oninput=e=>{state.dateNotes[selectedDate]=e.target.value;save()};document.getElementById('addTask').onclick=()=>{let v=document.getElementById('newTask').value.trim();if(!v)return;(state.tasks[selectedDate]??=[]).push({text:v,done:false});save();render()};document.querySelectorAll('[data-task-check]').forEach(el=>el.onchange=()=>{state.tasks[selectedDate][+el.dataset.taskCheck].done=el.checked;save();render()});document.querySelectorAll('[data-task-delete]').forEach(el=>el.onclick=()=>{state.tasks[selectedDate].splice(+el.dataset.taskDelete,1);save();render()})}
 if(currentPage==='exam'){document.querySelectorAll('[data-exam]').forEach(el=>el.oninput=()=>{state.exam[el.dataset.exam]=el.value;save()})}}
-render();
+load().then(()=>render()).catch(error=>{console.error('C10C startup failed',error);render()});
 </script></body></html>
