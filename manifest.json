@@ -1,0 +1,27 @@
+{
+  "id": "./",
+  "name": "Class 10 Command Centre",
+  "short_name": "C10C",
+  "description": "Your Class 10 study tracker, calendar, syllabus dashboard and exam centre.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffe17c",
+  "theme_color": "#ffe17c",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "./icons/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/maskable-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
