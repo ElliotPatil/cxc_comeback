@@ -43,6 +43,7 @@ const parentDoc=doc(cloudDB,"parentDashboard","current");
 const isParentView=location.pathname.replace(/\/$/,"")==="/parents"||new URLSearchParams(location.search).get("view")==="parents";
 async function publishParentSnapshot(){
  if(!cloudUser||isParentView)return;
+ const bridge=window.C10CBridge;if(!bridge)return;const {subjects,state,completion,localDateKey}=bridge;
  const subjectProgress=Object.entries(subjects).map(([subject,chapters])=>({subject,average:Math.round(chapters.reduce((n,x)=>n+x[1],0)/chapters.length),chapters:chapters.map(([name,baseline])=>({name,baseline,boardReady:!!(state.chapters[subject+"::"+name]?.checks?.[5])}))}));
  const all=Object.values(subjectProgress).flatMap(x=>x.chapters);
  const activity=(state.activity||[]).filter(x=>x&&x.date).slice(-120);
@@ -54,6 +55,8 @@ function queueCloudSync(){if(!cloudUser||isParentView)return;clearTimeout(cloudT
 function updateCloudStatus(){const el=document.getElementById("cloudAuthBtn");if(!el)return;el.textContent=cloudUser?(cloudSyncStatus==="error"?"CLOUD RETRY":"✓ CLOUD SYNC ON"):"CONNECT GOOGLE";el.classList.toggle("green",!!cloudUser&&cloudSyncStatus!=="error")}
 onAuthStateChanged(auth,user=>{cloudUser=user;cloudReady=true;cloudSyncStatus=user?"syncing":"offline";updateCloudStatus();if(user&&appLoaded&&!isParentView)publishParentSnapshot().catch(e=>{console.warn(e);cloudSyncStatus="error";updateCloudStatus()})});
 getRedirectResult(auth).catch(e=>console.warn("Google sign-in redirect:",e));
+window.C10CCloud={get isParentView(){return isParentView},queueCloudSync,toggleAuth(){if(cloudUser){return signOut(auth)}return signInWithRedirect(auth,new GoogleAuthProvider())}};
+window.dispatchEvent(new Event("c10c-firebase-ready"));
 const subjects={
 "Mathematics Standard":[["Real Numbers",100],["Polynomials",70],["Pair of Linear Equations in Two Variables",70],["Quadratic Equations",70],["Arithmetic Progressions",70],["Coordinate Geometry",70],["Triangles",30],["Circles",30],["Constructions",30],["Introduction to Trigonometry",30],["Some Applications of Trigonometry",30],["Areas Related to Circles",30],["Surface Areas and Volumes",30],["Statistics",30],["Probability",100]],
 "Science — Chemistry":[["Chemical Reactions and Equations",80],["Acids, Bases and Salts",70],["Metals and Non-metals",70],["Carbon and its Compounds",80]],
@@ -136,17 +139,18 @@ function updateStorageStatus(){
 function save(){
   const snapshot=JSON.parse(JSON.stringify(state));
   try{localStorage.setItem('class10cc',JSON.stringify(snapshot));}catch(error){console.warn('LocalStorage safety mirror unavailable.',error);}
-  saveQueue=saveQueue.then(()=>writeDBState(snapshot)).then(()=>{storageMode='indexeddb';updateStorageStatus();}).catch(error=>{console.error('IndexedDB save failed.',error);storageMode='fallback';updateStorageStatus();});queueCloudSync();
+  saveQueue=saveQueue.then(()=>writeDBState(snapshot)).then(()=>{storageMode='indexeddb';updateStorageStatus();}).catch(error=>{console.error('IndexedDB save failed.',error);storageMode='fallback';updateStorageStatus();});window.C10CCloud?.queueCloudSync();
 }
 function key(s,c){return s+'::'+c}function pct(s,c){return (subjects[s].find(x=>x[0]===c)||[c,0])[1]}
 function chapterData(s,c){return state.chapters[key(s,c)]||(state.chapters[key(s,c)]={checks:Array(6).fill(false)})}
 function allChapters(){return Object.entries(subjects).flatMap(([s,cs])=>cs.map(([c,p])=>({s,c,p})))}
 function completion(){let a=allChapters();return Math.round(a.reduce((n,x)=>n+x.p,0)/a.length)}
 function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+window.C10CBridge={get state(){return state},subjects,completion,localDateKey};
 function go(page){currentPage=page;document.querySelectorAll('.nav-btn[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));document.getElementById('sidebar').classList.remove('open');render()}
 document.querySelectorAll('.nav-btn[data-page]').forEach(b=>b.addEventListener('click',()=>go(b.dataset.page)));
 document.getElementById('menuBtn').onclick=()=>document.getElementById('sidebar').classList.toggle('open');
-document.getElementById("cloudAuthBtn").onclick=()=>{if(cloudUser){signOut(auth).catch(console.error)}else{signInWithRedirect(auth,new GoogleAuthProvider())}};
+document.getElementById("cloudAuthBtn").onclick=()=>{window.C10CCloud?.toggleAuth().catch(console.error)};
 document.getElementById('todayBtn').onclick=()=>{const today=new Date();selectedDate=localDateKey(today);calendarMonth=today.getMonth();calendarYear=today.getFullYear();go('calendar')};
 document.getElementById('exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='class10-command-centre-backup.json';a.click();URL.revokeObjectURL(a.href)};
 document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
@@ -170,7 +174,7 @@ function parentsPage(){
  }).catch(e=>{const root=document.getElementById("parentData");if(root)root.innerHTML='<div class="card">Could not load shared progress. Please try again later.</div>';console.error(e)});
 }
 
-function render(){if(isParentView){parentsPage();return;}document.getElementById('crumb').textContent='WORKSPACE / '+({tracker:'STUDY TRACKER',calendar:'CALENDAR',syllabus:'SYLLABUS COMPLETION',exam:'EXAM CENTRE'}[currentPage]);const p=document.getElementById('page');p.innerHTML=currentPage==='tracker'?trackerPage():currentPage==='calendar'?calendarPage():currentPage==='syllabus'?syllabusPage():examPage();bindPage()}
+function render(){if(window.C10CCloud?.isParentView){parentsPage();return;}document.getElementById('crumb').textContent='WORKSPACE / '+({tracker:'STUDY TRACKER',calendar:'CALENDAR',syllabus:'SYLLABUS COMPLETION',exam:'EXAM CENTRE'}[currentPage]);const p=document.getElementById('page');p.innerHTML=currentPage==='tracker'?trackerPage():currentPage==='calendar'?calendarPage():currentPage==='syllabus'?syllabusPage():examPage();bindPage()}
 function trackerPage(){const groups=[...new Set(Object.keys(subjects).map(s=>s.split(' — ')[0]))];let subjectButtons=Object.keys(subjects).map(s=>`<button class="subject-pick ${s===currentSubject?'active':''}" data-sub="${escapeHtml(s)}">${escapeHtml(s)} <span>›</span></button>`).join('');let chapters=subjects[currentSubject].map(([c,p])=>`<option value="${escapeHtml(c)}" ${c===currentChapter?'selected':''}>${escapeHtml(c)} · ${p}% baseline</option>`).join('');let d=chapterData(currentSubject,currentChapter);let checks=checklist.map((t,i)=>`<label class="check"><input type="checkbox" data-check="${i}" ${d.checks[i]?'checked':''}>${t}</label>`).join('');let progress=d.checks.filter(Boolean).length/6*100;let baseline=pct(currentSubject,currentChapter);let note=state.notes[key(currentSubject,currentChapter)]||'';return `${head('01 / WORKSPACE','Study Tracker','One subject, every chapter, all six milestones.')}
 <div class="subject-layout"><div><div class="section-title">SUBJECTS</div><div class="subject-list">${subjectButtons}</div><div class="footer-note">Choose a subject, then select a chapter to open its checklist and personal notepad.</div></div><div><div class="card yellow"><div class="eyebrow">SELECTED SUBJECT</div><div class="subject-head"><h2 class="subject-title">${escapeHtml(currentSubject)}</h2><span class="tag">${subjects[currentSubject].length} CHAPTERS</span></div><label class="field-label" for="chapterSelect">CHAPTER DROPDOWN</label><select id="chapterSelect" class="chapter-select">${chapters}</select><div class="chapter-meta"><span class="tag ${baseline<50?'red':baseline<80?'yellowtag':'green'}">BASELINE ${baseline}%</span><span class="tag">CHECKLIST ${Math.round(progress)}%</span></div></div>
 <div class="card chapter-card"><div class="eyebrow">CHAPTER MILESTONES</div><h2 class="section-title" style="margin-top:5px">${escapeHtml(currentChapter)}</h2><div class="check-grid">${checks}</div><div class="progress-row"><span>Milestones completed</span><span>${d.checks.filter(Boolean).length}/6</span></div><div class="bar"><i style="width:${progress}%"></i></div><div class="footer-note">The baseline completion percentage is your earlier self-assessment. The six milestones are tracked separately.</div></div>
@@ -223,5 +227,5 @@ const subj=document.getElementById("samplePaperSubject");if(subj){subj.innerHTML
 const countRoot=document.getElementById("samplePaperCounts");if(countRoot)countRoot.innerHTML=Object.keys(subjects).map(x=>'<div class="item"><span>'+escapeHtml(x)+'</span><strong>'+(state.samplePapers[x]||0)+'</strong></div>').join('');
 document.getElementById("samplePaperAdd").onclick=()=>{const phrase=document.getElementById("samplePaperQuick").value.trim().toLowerCase();if(!phrase.includes("sample paper")){alert('Type “sample paper” to use this quick entry.');return;}const subject=subj.value;state.samplePapers[subject]=(state.samplePapers[subject]||0)+1;state.activity.push({date:localDateKey(),label:"Logged a sample paper · "+subject});save();render()};
 document.querySelectorAll('[data-exam]').forEach(el=>el.oninput=()=>{state.exam[el.dataset.exam]=el.value;save()})}}
-if(isParentView){parentsPage()}else{load().then(()=>{appLoaded=true;render();if(cloudUser)publishParentSnapshot().catch(e=>{console.warn(e);cloudSyncStatus="error";updateCloudStatus()})}).catch(error=>{console.error('C10C startup failed',error);render()});}
+window.addEventListener("c10c-firebase-ready",()=>{if(window.C10CCloud?.isParentView){parentsPage()}else{load().then(()=>{appLoaded=true;render();if(cloudUser)window.C10CCloud.queueCloudSync()}).catch(error=>{console.error("C10C startup failed",error);render()})}},{once:true});
 </script></body></html>
