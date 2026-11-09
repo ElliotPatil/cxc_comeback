@@ -56,7 +56,7 @@ function updateCloudStatus(){const el=document.getElementById("cloudAuthBtn");if
 onAuthStateChanged(auth,user=>{cloudUser=user;cloudReady=true;cloudSyncStatus=user?"syncing":"offline";updateCloudStatus();if(user&&appLoaded&&!isParentView)publishParentSnapshot().catch(e=>{console.warn(e);cloudSyncStatus="error";updateCloudStatus()})});
 getRedirectResult(auth).catch(e=>console.warn("Google sign-in redirect:",e));
 window.C10CCloud={get isParentView(){return isParentView},queueCloudSync,toggleAuth(){if(cloudUser){return signOut(auth)}return signInWithRedirect(auth,new GoogleAuthProvider())}};
-window.dispatchEvent(new Event("c10c-firebase-ready"));
+
 const subjects={
 "Mathematics Standard":[["Real Numbers",100],["Polynomials",70],["Pair of Linear Equations in Two Variables",70],["Quadratic Equations",70],["Arithmetic Progressions",70],["Coordinate Geometry",70],["Triangles",30],["Circles",30],["Constructions",30],["Introduction to Trigonometry",30],["Some Applications of Trigonometry",30],["Areas Related to Circles",30],["Surface Areas and Volumes",30],["Statistics",30],["Probability",100]],
 "Science — Chemistry":[["Chemical Reactions and Equations",80],["Acids, Bases and Salts",70],["Metals and Non-metals",70],["Carbon and its Compounds",80]],
@@ -227,5 +227,5 @@ const subj=document.getElementById("samplePaperSubject");if(subj){subj.innerHTML
 const countRoot=document.getElementById("samplePaperCounts");if(countRoot)countRoot.innerHTML=Object.keys(subjects).map(x=>'<div class="item"><span>'+escapeHtml(x)+'</span><strong>'+(state.samplePapers[x]||0)+'</strong></div>').join('');
 document.getElementById("samplePaperAdd").onclick=()=>{const phrase=document.getElementById("samplePaperQuick").value.trim().toLowerCase();if(!phrase.includes("sample paper")){alert('Type “sample paper” to use this quick entry.');return;}const subject=subj.value;state.samplePapers[subject]=(state.samplePapers[subject]||0)+1;state.activity.push({date:localDateKey(),label:"Logged a sample paper · "+subject});save();render()};
 document.querySelectorAll('[data-exam]').forEach(el=>el.oninput=()=>{state.exam[el.dataset.exam]=el.value;save()})}}
-window.addEventListener("c10c-firebase-ready",()=>{if(window.C10CCloud?.isParentView){parentsPage()}else{load().then(()=>{appLoaded=true;render();if(cloudUser)window.C10CCloud.queueCloudSync()}).catch(error=>{console.error("C10C startup failed",error);render()})}},{once:true});
+if(isParentView){parentsPage()}else{load().then(()=>{appLoaded=true;render();if(cloudUser)queueCloudSync()}).catch(error=>{console.error("C10C startup failed",error);render()})}
 </script></body></html>
