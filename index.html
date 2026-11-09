@@ -37,7 +37,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/13.2.0/firebas
 import { getAuth, GoogleAuthProvider, signInWithRedirect, signOut, onAuthStateChanged, getRedirectResult, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
 const firebaseConfig={apiKey:"AIzaSyAva3kepEBUpMUCLKu0_v8GuLOWb-OUhtE",authDomain:"cxccomeback.firebaseapp.com",projectId:"cxccomeback",storageBucket:"cxccomeback.firebasestorage.app",messagingSenderId:"132627251034",appId:"1:132627251034:web:dd68bae951f62f33b6bd63",measurementId:"G-9Q01C1G028"};
-const firebaseApp=initializeApp(firebaseConfig),auth=getAuth(firebaseApp),cloudDB=getFirestore(firebaseApp);\nsetPersistence(auth,browserLocalPersistence).catch(e=>console.error("Firebase auth persistence:",e.code,e.message));
+const firebaseApp=initializeApp(firebaseConfig),auth=getAuth(firebaseApp),cloudDB=getFirestore(firebaseApp);
+setPersistence(auth,browserLocalPersistence).catch(e=>console.error("Firebase auth persistence:",e.code,e.message));
 let cloudUser=null,cloudReady=false,appLoaded=false,cloudTimer=null,cloudSyncStatus="offline";
 const parentDoc=doc(cloudDB,"parentDashboard","current");
 const isParentView=location.pathname.replace(/\/$/,"")==="/parents"||new URLSearchParams(location.search).get("view")==="parents";
