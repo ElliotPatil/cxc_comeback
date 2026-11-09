@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/parents",
+      "destination": "/index.html"
+    }
+  ]
+}
