@@ -35,7 +35,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithRedirect, signInWithPopup, signOut, onAuthStateChanged, getRedirectResult, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js";
 const firebaseConfig={apiKey:"AIzaSyAva3kepEBUpMUCLKu0_v8GuLOWb-OUhtE",authDomain:"cxccomeback.firebaseapp.com",projectId:"cxccomeback",storageBucket:"cxccomeback.firebasestorage.app",messagingSenderId:"132627251034",appId:"1:132627251034:web:dd68bae951f62f33b6bd63",measurementId:"G-9Q01C1G028"};
 const firebaseApp=initializeApp(firebaseConfig),auth=getAuth(firebaseApp),cloudDB=getFirestore(firebaseApp);
 const authPersistence=setPersistence(auth,browserLocalPersistence);
@@ -164,7 +164,7 @@ function head(kicker,title,sub,extra=''){return `<div class="page-head"><div><di
 function parentsPage(){
  const loading='<div class="card">Loading shared progress…</div>';
  document.body.innerHTML='<main class="content" style="max-width:1100px;margin:auto"><div class="page-head"><div><div class="eyebrow">CLASS 10 COMMAND CENTRE</div><h1>Parent Progress</h1><div class="sub">A clear view of daily work, completed days and study consistency.</div></div></div><div id="parentData">'+loading+'</div><div class="footer-note">Only study activity and completion information explicitly shared by the student is shown. Private notes are not shared.</div></main>';
- getDoc(parentDoc).then(snap=>{
+ onSnapshot(parentDoc,snap=>{
   const root=document.getElementById("parentData");if(!root)return;
   if(!snap.exists()){root.innerHTML='<div class="card">No progress has been published yet. The student needs to connect Google in C10C first.</div>';return}
   const d=snap.data(),papers=d.samplePapers||{},activity=(d.dailyActivity||d.weeklyActivity||[]).filter(x=>x&&x.date).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
@@ -192,7 +192,7 @@ function parentsPage(){
    document.getElementById('parentToday').onclick=()=>{const now=new Date();selected=localDateKey(now);viewDate=new Date(now.getFullYear(),now.getMonth(),1,12);render()};
   };
   render();
- }).catch(e=>{const root=document.getElementById("parentData");if(root)root.innerHTML='<div class="card"><strong>Could not load shared progress.</strong><p>'+escapeHtml(e.code||"Firestore error")+": "+escapeHtml(e.message||"Please try again later.")+'</p></div>';console.error("Parent dashboard read failed:",e.code,e.message,e)});
+ },e=>{const root=document.getElementById("parentData");if(root)root.innerHTML='<div class="card"><strong>Could not load shared progress.</strong><p>'+escapeHtml(e.code||"Firestore error")+": "+escapeHtml(e.message||"Please try again later.")+'</p></div>';console.error("Parent dashboard read failed:",e.code,e.message,e)});
 }
 
 function render(){if(window.C10CCloud?.isParentView){parentsPage();return;}document.getElementById('crumb').textContent='WORKSPACE / '+({tracker:'STUDY TRACKER',calendar:'CALENDAR',syllabus:'SYLLABUS COMPLETION',exam:'EXAM CENTRE'}[currentPage]);const p=document.getElementById('page');p.innerHTML=currentPage==='tracker'?trackerPage():currentPage==='calendar'?calendarPage():currentPage==='syllabus'?syllabusPage():examPage();bindPage()}
