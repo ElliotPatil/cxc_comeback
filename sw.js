@@ -1,5 +1,5 @@
 
-const CACHE_NAME = "c10c-shell-v33";
+const CACHE_NAME = "c10c-shell-v34";
 
 const APP_SHELL = [
   "./",
