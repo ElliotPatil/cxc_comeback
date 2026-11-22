@@ -266,13 +266,20 @@ authPersistence.catch(e=>{console.error("Firebase auth persistence:",e.code,e.me
 let cloudUser=null,cloudReady=false,appLoaded=false,cloudTimer=null,cloudSyncStatus="offline";
 const parentDoc=doc(cloudDB,"parentDashboard","current");
 const isParentView=location.pathname.replace(/\/$/,"")==="/parents"||new URLSearchParams(location.search).get("view")==="parents";
+function cleanFirestoreValue(value){
+ if(value===undefined||typeof value==="function"||typeof value==="symbol"||typeof value==="bigint")return undefined;
+ if(value===null||typeof value!=="object")return value;
+ if(value instanceof Date)return value;
+ if(Array.isArray(value))return value.map(item=>{const cleaned=cleanFirestoreValue(item);return cleaned===undefined?null:cleaned});
+ const out={};for(const [key,item] of Object.entries(value)){const cleaned=cleanFirestoreValue(item);if(cleaned!==undefined)out[key]=cleaned;}return out;
+}
 async function publishParentSnapshot(){
  if(!cloudUser||isParentView)return;
  const bridge=window.C10CBridge;if(!bridge)return;const {subjects,state,completion,localDateKey}=bridge;
  const subjectProgress=Object.entries(subjects).map(([subject,chapters])=>({subject,average:Math.round(chapters.reduce((n,x)=>n+((state.chapters[subject+"::"+x[0]]?.checks||[]).filter(Boolean).length/6*100),0)/chapters.length),chapters:chapters.map(([name])=>({name,progress:Math.round((state.chapters[subject+"::"+name]?.checks||[]).filter(Boolean).length/6*100),boardReady:!!(state.chapters[subject+"::"+name]?.checks?.[5])}))}));
  const all=Object.values(subjectProgress).flatMap(x=>x.chapters);
  const activity=(state.activity||[]).filter(x=>x&&x.date).slice(-120);
- const safe={ownerUid:cloudUser.uid,overallCompletion:completion(),subjectProgress,boardReadyCount:all.filter(x=>x.boardReady).length,totalChapters:all.length,samplePapers:state.samplePapers||{},mathQuestionLogs:state.mathQuestions||{},samplePaperTotal:Object.values(state.samplePapers||{}).reduce((a,b)=>a+(Number(b)||0),0),dailyActivity:activity.slice(-500),dayCompletion:state.dayCompletion||{},schedule:{...Object.fromEntries(Object.entries(schedule).map(([day,plan])=>[localDateKey(new Date(2026,10,Number(day),12)),[plan]])),...(state.schedule||{})},subjectCompletion:state.subjectCompletion||{},updatedAt:serverTimestamp()};
+ const safe=cleanFirestoreValue({ownerUid:cloudUser.uid,overallCompletion:completion(),subjectProgress,boardReadyCount:all.filter(x=>x.boardReady).length,totalChapters:all.length,samplePapers:state.samplePapers||{},mathQuestionLogs:state.mathQuestions||{},samplePaperTotal:Object.values(state.samplePapers||{}).reduce((a,b)=>a+(Number(b)||0),0),dailyActivity:activity.slice(-500),dayCompletion:state.dayCompletion||{},schedule:{...Object.fromEntries(Object.entries(schedule).map(([day,plan])=>[localDateKey(new Date(2026,10,Number(day),12)),[plan]])),...(state.schedule||{})},subjectCompletion:state.subjectCompletion||{}});safe.updatedAt=serverTimestamp();
  await setDoc(parentDoc,safe,{merge:true});
  cloudSyncStatus="synced";updateCloudStatus();
 }
